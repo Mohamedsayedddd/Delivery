@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام إدارة التوصيل المتطور</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { font-family: 'Cairo', sans-serif; background-color: #f3f4f6; }
+        .sidebar { transition: all 0.3s; }
+        .card { background: white; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        @media print {
+            .no-print { display: none; }
+            .print-only { display: block; }
+        }
+        .print-only { display: none; }
+        .status-badge { @apply px-2 py-1 rounded-full text-xs font-bold; }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="flex h-screen overflow-hidden">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="bg-indigo-900 text-white w-64 flex-shrink-0 hidden md:flex flex-col no-print">
+            <div class="p-4 text-2xl font-bold text-center border-b border-indigo-800">نظام التوصيل</div>
+            <nav class="flex-1 overflow-y-auto p-4 space-y-2">
+                <a href="#" onclick="showTab('dashboard')" class="flex items-center p-3 hover:bg-indigo-800 rounded transition"><i class="fas fa-chart-line ml-3"></i> لوحة التحكم</a>
+                <a href="#" onclick="showTab('delegates')" class="flex items-center p-3 hover:bg-indigo-800 rounded transition"><i class="fas fa-users ml-3"></i> المناديب</a>
+                <a href="#" onclick="showTab('orders')" class="flex items-center p-3 hover:bg-indigo-800 rounded transition"><i class="fas fa-shopping-cart ml-3"></i> الطلبات</a>
+                <a href="#" onclick="showTab('notifications')" class="flex items-center p-3 hover:bg-indigo-800 rounded transition relative">
+                    <i class="fas fa-bell ml-3"></i> الإشعارات
+                    <span id="notif-badge-sidebar" class="absolute left-2 top-3 bg-red-500 text-white text-[10px] rounded-full h-4 w-4 flex items-center justify-center hidden">0</span>
+                </a>
+                <a href="#" onclick="showTab('archive')" class="flex items-center p-3 hover:bg-indigo-800 rounded transition"><i class="fas fa-archive ml-3"></i> الأرشيف اليومي</a>
+                <a href="#" onclick="showTab('reports')" class="flex items-center p-3 hover:bg-indigo-800 rounded transition"><i class="fas fa-file-invoice-dollar ml-3"></i> التقارير</a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 overflow-y-auto relative">
+            <!-- Top Header -->
+            <header class="bg-white shadow p-4 flex justify-between items-center no-print sticky top-0 z-10">
+                <button onclick="toggleSidebar()" class="md:hidden text-gray-600"><i class="fas fa-bars text-xl"></i></button>
+                <div id="current-tab-title" class="text-xl font-bold text-gray-800">لوحة التحكم</div>
+                <div class="flex items-center space-x-4 space-x-reverse">
+                    <div class="relative cursor-pointer" onclick="showTab('notifications')">
+                        <i class="fas fa-bell text-gray-500 text-xl"></i>
+                        <span id="notif-count" class="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center hidden">0</span>
+                    </div>
+                    <div class="flex items-center border-r pr-4">
+                        <span class="ml-2 text-gray-700 font-semibold">المدير العام</span>
+                        <div class="h-10 w-10 bg-indigo-600 rounded-full flex items-center justify-center text-white font-bold">A</div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="p-6">
+                <!-- Dashboard Tab -->
+                <div id="dashboard" class="tab-content active">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                        <div class="card p-6 border-r-4 border-blue-500">
+                            <div class="text-gray-500 text-sm">طلبات اليوم</div>
+                            <div class="text-2xl font-bold" id="stat-today-orders">0</div>
+                        </div>
+                        <div class="card p-6 border-r-4 border-green-500">
+                            <div class="text-gray-500 text-sm">إجمالي التحصيل</div>
+                            <div class="text-2xl font-bold" id="stat-total-cash">0 ج.م</div>
+                        </div>
+                        <div class="card p-6 border-r-4 border-yellow-500">
+                            <div class="text-gray-500 text-sm">بانتظار المندوب</div>
+                            <div class="text-2xl font-bold text-yellow-600" id="stat-pending-assignment">0</div>
+                        </div>
+                        <div class="card p-6 border-r-4 border-purple-500">
+                            <div class="text-gray-500 text-sm">مناديب يعملون</div>
+                            <div class="text-2xl font-bold text-green-600" id="stat-active-drivers">0</div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="card p-6">
+                            <h3 class="font-bold mb-4 border-b pb-2 flex justify-between">
+                                <span>أحدث الطلبات</span>
+                                <button onclick="showTab('orders')" class="text-indigo-600 text-xs">عرض الكل</button>
+                            </h3>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-right">
+                                    <thead><tr class="text-gray-500 text-sm border-b"><th class="pb-2">ID</th><th class="pb-2">العميل</th><th class="pb-2">المندوب</th><th class="pb-2">الحالة</th></tr></thead>
+                                    <tbody id="recent-orders-list"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="card p-6">
+                            <h3 class="font-bold mb-4 border-b pb-2">حالة المناديب اليوم</h3>
+                            <div id="delegate-status-list" class="space-y-4"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Delegates Tab -->
+                <div id="delegates" class="tab-content">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold">إدارة المناديب</h2>
+                        <button onclick="openModal('delegate-modal')" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"><i class="fas fa-plus ml-2"></i>إضافة مندوب جديد</button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="delegates-grid">
+                        <!-- Cards will be injected here -->
+                    </div>
+                </div>
+
+                <!-- Orders Tab -->
+                <div id="orders" class="tab-content">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                        <h2 class="text-2xl font-bold">إدارة الطلبات</h2>
+                        <div class="flex gap-2">
+                            <button onclick="openModal('order-modal')" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"><i class="fas fa-plus ml-2"></i>إضافة طلب</button>
+                        </div>
+                    </div>
+                    
+                    <div class="card p-4 mb-6 flex flex-wrap gap-2 items-center">
+                        <span class="text-sm font-bold ml-2">تصفية:</span>
+                        <button onclick="filterOrders('all')" class="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm font-medium">الكل</button>
+                        <button onclick="filterOrders('pending_assignment')" class="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-sm font-medium">بانتظار مندوب</button>
+                        <button onclick="filterOrders('جاري التنفيذ')" class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium">جاري التنفيذ</button>
+                        <button onclick="filterOrders('تم التسليم')" class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-medium">تم التسليم</button>
+                    </div>
+
+                    <div class="card overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-right">
+                                <thead class="bg-gray-50 border-b">
+                                    <tr>
+                                        <th class="p-4">ID</th>
+                                        <th class="p-4">العميل</th>
+                                        <th class="p-4">المندوب</th>
+                                        <th class="p-4">التحصيل (COD)</th>
+                                        <th class="p-4">الحالة</th>
+                                        <th class="p-4">الإجراءات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="orders-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notifications Tab -->
+                <div id="notifications" class="tab-content">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold">مركز الإشعارات</h2>
+                        <div class="flex gap-2">
+                            <button onclick="markAllNotifsRead()" class="text-indigo-600 text-sm font-bold hover:underline">تحديد الكل كمقروء</button>
+                            <button onclick="clearNotifications()" class="text-red-600 text-sm font-bold hover:underline mr-4">مسح الكل</button>
+                        </div>
+                    </div>
+                    <div class="card p-4 mb-6 flex gap-2">
+                        <button onclick="filterNotifs('all')" class="bg-gray-200 px-4 py-1 rounded-full text-sm active-notif-filter">الكل</button>
+                        <button onclick="filterNotifs('unread')" class="bg-gray-200 px-4 py-1 rounded-full text-sm">غير مقروء</button>
+                    </div>
+                    <div id="notifications-list" class="space-y-3">
+                        <!-- Notifications injected here -->
+                    </div>
+                </div>
+
+                <!-- Archive Tab -->
+                <div id="archive" class="tab-content">
+                    <h2 class="text-2xl font-bold mb-6">الأرشيف اليومي</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4" id="archive-days-list">
+                        <!-- Days will be listed here -->
+                    </div>
+                    <div id="archive-detail" class="mt-8 hidden">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xl font-bold" id="archive-date-title">أرشيف يوم ...</h3>
+                            <button onclick="closeArchiveDetail()" class="text-gray-500 hover:text-black">إغلاق <i class="fas fa-times"></i></button>
+                        </div>
+                        <div class="card overflow-hidden">
+                            <table class="w-full text-right">
+                                <thead class="bg-gray-50 border-b">
+                                    <tr><th class="p-4">ID</th><th class="p-4">العميل</th><th class="p-4">المندوب</th><th class="p-4">المبلغ</th><th class="p-4">الحالة</th></tr>
+                                </thead>
+                                <tbody id="archive-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reports Tab (Placeholder) -->
+                <div id="reports" class="tab-content">
+                    <h2 class="text-2xl font-bold mb-6">التقارير المالية</h2>
+                    <div class="card p-20 text-center text-gray-500">
+                        <i class="fas fa-chart-pie text-6xl mb-4 block"></i>
+                        قريباً: تقارير تحليلية متقدمة للأداء المالي والإنتاجية.
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- MODALS -->
+    <!-- Delegate Modal -->
+    <div id="delegate-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg w-full max-w-md p-6">
+            <h3 class="text-xl font-bold mb-4" id="delegate-modal-title">إضافة مندوب جديد</h3>
+            <form id="delegate-form" onsubmit="handleDelegateSubmit(event)">
+                <input type="hidden" id="delegate-id">
+                <div class="space-y-4">
+                    <div><label class="block text-sm font-medium mb-1">الاسم بالكامل</label><input type="text" id="delegate-name" class="w-full p-2 border rounded" required></div>
+                    <div><label class="block text-sm font-medium mb-1">رقم الهاتف</label><input type="text" id="delegate-phone" class="w-full p-2 border rounded" required></div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">نوع المندوب</label>
+                        <select id="delegate-type" class="w-full p-2 border rounded">
+                            <option value="سيارة">سيارة</option>
+                            <option value="موتوسيكل">موتوسيكل</option>
+                            <option value="عجلة">عجلة</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end space-x-2 space-x-reverse">
+                    <button type="button" onclick="closeModal('delegate-modal')" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">إلغاء</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">حفظ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Order Modal -->
+    <div id="order-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg w-full max-w-2xl p-6 overflow-y-auto max-h-[90vh]">
+            <h3 class="text-xl font-bold mb-4" id="order-modal-title">إضافة طلب جديد</h3>
+            <form id="order-form" onsubmit="handleOrderSubmit(event)">
+                <input type="hidden" id="order-id-hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div><label class="block text-sm font-medium mb-1">اسم العميل</label><input type="text" id="order-customer" class="w-full p-2 border rounded" required></div>
+                    <div><label class="block text-sm font-medium mb-1">رقم الهاتف</label><input type="text" id="order-phone" class="w-full p-2 border rounded" required></div>
+                    <div><label class="block text-sm font-medium mb-1">منطقة الاستلام</label><input type="text" id="order-pickup" class="w-full p-2 border rounded" required></div>
+                    <div><label class="block text-sm font-medium mb-1">منطقة التسليم</label><input type="text" id="order-dropoff" class="w-full p-2 border rounded" required></div>
+                    <div><label class="block text-sm font-medium mb-1">سعر التوصيل</label><input type="number" id="order-delivery-fee" class="w-full p-2 border rounded" required></div>
+                    <div><label class="block text-sm font-medium mb-1">المبلغ المراد تحصيله (COD)</label><input type="number" id="order-cod" class="w-full p-2 border rounded" required></div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">تعيين مندوب (اختياري)</label>
+                        <select id="order-delegate" class="w-full p-2 border rounded"></select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">حالة الطلب</label>
+                        <select id="order-status" class="w-full p-2 border rounded">
+                            <option value="pending_assignment">بانتظار تعيين مندوب</option>
+                            <option value="جاري التنفيذ">جاري التنفيذ</option>
+                            <option value="في الطريق">في الطريق</option>
+                            <option value="تم التسليم">تم التسليم</option>
+                            <option value="راجع">راجع</option>
+                        </select>
+                    </div>
+                    <div class="md:col-span-2"><label class="block text-sm font-medium mb-1">ملاحظات</label><textarea id="order-notes" class="w-full p-2 border rounded"></textarea></div>
+                </div>
+                <div class="mt-6 flex justify-end space-x-2 space-x-reverse">
+                    <button type="button" onclick="closeModal('order-modal')" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">إلغاء</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">حفظ الطلب</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Closing/Start Day Modal -->
+    <div id="day-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg w-full max-w-md p-6">
+            <h3 class="text-xl font-bold mb-4" id="day-modal-title">بدء يوم المندوب</h3>
+            <form id="day-form" onsubmit="handleDayAction(event)">
+                <input type="hidden" id="day-delegate-id">
+                <input type="hidden" id="day-action-type">
+                <div id="day-modal-content" class="space-y-4">
+                    <!-- Dynamic content based on start/close -->
+                </div>
+                <div class="mt-6 flex justify-end space-x-2 space-x-reverse">
+                    <button type="button" onclick="closeModal('day-modal')" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">إلغاء</button>
+                    <button type="submit" id="day-submit-btn" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">تأكيد</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Data Structures
+        let delegates = JSON.parse(localStorage.getItem('delegates')) || [];
+        let orders = JSON.parse(localStorage.getItem('orders')) || [];
+        let notifications = JSON.parse(localStorage.getItem('notifications')) || [];
+        let archive = JSON.parse(localStorage.getItem('archive')) || {};
+        let orderCounter = parseInt(localStorage.getItem('orderCounter')) || 1;
+        let lastArchiveDate = localStorage.getItem('lastArchiveDate') || "";
+
+        // Check for Auto-Archive at midnight
+        function checkAutoArchive() {
+            const today = new Date().toISOString().split('T')[0];
+            if (lastArchiveDate !== "" && lastArchiveDate !== today) {
+                runDailyArchive(lastArchiveDate);
+            }
+            lastArchiveDate = today;
+            localStorage.setItem('lastArchiveDate', today);
+        }
+
+        function runDailyArchive(dateStr) {
+            if (orders.length === 0) return;
+            
+            // Move current orders to archive
+            archive[dateStr] = [...orders];
+            
+            // Clear current data for new day
+            orders = [];
+            orderCounter = 1;
+            
+            // Reset delegate daily data but keep delegate list
+            delegates.forEach(d => {
+                d.isActive = false;
+                d.dailyData = null;
+            });
+
+            saveData();
+            addNotification("نظام", `تمت أرشفة بيانات يوم ${dateStr} تلقائياً وتصفير العدادات.`, "info");
+            location.reload(); // Refresh to start fresh
+        }
+
+        function saveData() {
+            localStorage.setItem('delegates', JSON.stringify(delegates));
+            localStorage.setItem('orders', JSON.stringify(orders));
+            localStorage.setItem('notifications', JSON.stringify(notifications));
+            localStorage.setItem('archive', JSON.stringify(archive));
+            localStorage.setItem('orderCounter', orderCounter.toString());
+        }
+
+        // Navigation
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            
+            const titles = {
+                'dashboard': 'لوحة التحكم',
+                'delegates': 'إدارة المناديب',
+                'orders': 'إدارة الطلبات',
+                'notifications': 'مركز الإشعارات',
+                'archive': 'الأرشيف اليومي',
+                'reports': 'التقارير المالية'
+            };
+            document.getElementById('current-tab-title').innerText = titles[tabId];
+            
+            if(window.innerWidth < 768) toggleSidebar();
+            
+            // Refresh views
+            if(tabId === 'dashboard') updateDashboard();
+            if(tabId === 'delegates') renderDelegates();
+            if(tabId === 'orders') renderOrders();
+            if(tabId === 'notifications') renderNotifications();
+            if(tabId === 'archive') renderArchive();
+        }
+
+        function toggleSidebar() {
+            const sb = document.getElementById('sidebar');
+            sb.classList.toggle('hidden');
+            sb.classList.toggle('flex');
+        }
+
+        // Notification Logic
+        function addNotification(title, description, type = 'info') {
+            const notif = {
+                id: Date.now(),
+                title,
+                description,
+                type,
+                date: new Date().toLocaleDateString('ar-EG'),
+                time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'}),
+                isRead: false
+            };
+            notifications.unshift(notif);
+            saveData();
+            updateNotifBadge();
+            if (document.getElementById('notifications').classList.contains('active')) renderNotifications();
+        }
+
+        function updateNotifBadge() {
+            const unreadCount = notifications.filter(n => !n.isRead).length;
+            const badge = document.getElementById('notif-count');
+            const sidebarBadge = document.getElementById('notif-badge-sidebar');
+            
+            if (unreadCount > 0) {
+                badge.innerText = unreadCount;
+                badge.classList.remove('hidden');
+                sidebarBadge.innerText = unreadCount;
+                sidebarBadge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+                sidebarBadge.classList.add('hidden');
+            }
+        }
+
+        function renderNotifications(filter = 'all') {
+            const list = document.getElementById('notifications-list');
+            let filtered = notifications;
+            if (filter === 'unread') filtered = notifications.filter(n => !n.isRead);
+            
+            if (filtered.length === 0) {
+                list.innerHTML = '<div class="card p-10 text-center text-gray-400">لا توجد إشعارات</div>';
+                return;
+            }
+
+            list.innerHTML = filtered.map(n => {
+                const colors = {
+                    'success': 'border-green-500 bg-green-50',
+                    'warning': 'border-yellow-500 bg-yellow-50',
+                    'error': 'border-red-500 bg-red-50',
+                    'info': 'border-indigo-500 bg-indigo-50'
+                };
+                return `
+                    <div class="card p-4 border-r-4 ${colors[n.type]} flex justify-between items-center ${n.isRead ? 'opacity-60' : ''}">
+                        <div>
+                            <div class="font-bold text-gray-800">${n.title}</div>
+                            <div class="text-sm text-gray-600">${n.description}</div>
+                            <div class="text-[10px] text-gray-400 mt-1">${n.date} | ${n.time}</div>
+                        </div>
+                        <div class="flex gap-2">
+                            ${!n.isRead ? `<button onclick="markNotifRead(${n.id})" class="text-indigo-600 text-xs font-bold">تحديد كمقروء</button>` : ''}
+                            <button onclick="deleteNotif(${n.id})" class="text-red-400 hover:text-red-600"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function markNotifRead(id) {
+            const n = notifications.find(x => x.id === id);
+            if (n) n.isRead = true;
+            saveData();
+            updateNotifBadge();
+            renderNotifications();
+        }
+
+        function markAllNotifsRead() {
+            notifications.forEach(n => n.isRead = true);
+            saveData();
+            updateNotifBadge();
+            renderNotifications();
+        }
+
+        function clearNotifications() {
+            if(confirm('هل أنت متأكد من مسح جميع الإشعارات؟')) {
+                notifications = [];
+                saveData();
+                updateNotifBadge();
+                renderNotifications();
+            }
+        }
+
+        // Delegate Logic
+        function renderDelegates() {
+            const grid = document.getElementById('delegates-grid');
+            grid.innerHTML = delegates.map(d => {
+                const isActive = d.isActive;
+                return `
+                    <div class="card p-5 border-t-4 ${isActive ? 'border-green-500' : 'border-gray-300'}">
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <h3 class="font-bold text-lg">${d.name}</h3>
+                                <p class="text-xs text-gray-500">${d.phone} | ${d.type}</p>
+                            </div>
+                            <span class="status-badge ${isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}">
+                                <i class="fas fa-circle text-[8px] ml-1"></i> ${isActive ? 'يعمل الآن' : 'غير نشط'}
+                            </span>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-2 mb-4 text-xs">
+                            <div class="bg-gray-50 p-2 rounded">
+                                <span class="block text-gray-400">العهدة</span>
+                                <span class="font-bold">${d.dailyData?.custody || 0} ج.م</span>
+                            </div>
+                            <div class="bg-gray-50 p-2 rounded">
+                                <span class="block text-gray-400">التحصيل</span>
+                                <span class="font-bold text-indigo-600">${calculateDelegateCollected(d.id)} ج.م</span>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-2">
+                            ${!isActive ? 
+                                `<button onclick="openDayModal(${d.id}, 'start')" class="flex-1 bg-green-600 text-white py-2 rounded text-sm font-bold hover:bg-green-700">بدء اليوم</button>` :
+                                `<button onclick="openDayModal(${d.id}, 'close')" class="flex-1 bg-red-500 text-white py-2 rounded text-sm font-bold hover:bg-red-600">تقفيل اليوم</button>`
+                            }
+                            <button onclick="editDelegate(${d.id})" class="bg-gray-100 p-2 rounded text-gray-600 hover:bg-gray-200"><i class="fas fa-edit"></i></button>
+                            <button onclick="deleteDelegate(${d.id})" class="bg-red-50 p-2 rounded text-red-400 hover:bg-red-100"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            updateDelegateSelects();
+        }
+
+        function calculateDelegateCollected(delegateId) {
+            return orders
+                .filter(o => o.delegateId == delegateId && o.status === 'تم التسليم')
+                .reduce((sum, o) => sum + (o.cod || 0), 0);
+        }
+
+        function openDayModal(id, type) {
+            const d = delegates.find(x => x.id == id);
+            document.getElementById('day-delegate-id').value = id;
+            document.getElementById('day-action-type').value = type;
+            const content = document.getElementById('day-modal-content');
+            const title = document.getElementById('day-modal-title');
+            const submitBtn = document.getElementById('day-submit-btn');
+
+            if (type === 'start') {
+                title.innerText = `بدء يوم جديد للمندوب: ${d.name}`;
+                submitBtn.innerText = "تأكيد بدء اليوم";
+                submitBtn.className = "px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700";
+                content.innerHTML = `
+                    <div>
+                        <label class="block text-sm font-medium mb-1">العهدة المستلمة (ج.م)</label>
+                        <input type="number" id="day-custody" class="w-full p-2 border rounded" value="0" required>
+                    </div>
+                `;
+            } else {
+                title.innerText = `تقفيل حساب المندوب: ${d.name}`;
+                submitBtn.innerText = "إتمام التقفيل";
+                submitBtn.className = "px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700";
+                
+                const collected = calculateDelegateCollected(id);
+                const deliveryFees = orders.filter(o => o.delegateId == id && o.status === 'تم التسليم').reduce((sum, o) => sum + (o.deliveryFee || 0), 0);
+                
+                content.innerHTML = `
+                    <div class="bg-indigo-50 p-4 rounded text-sm space-y-2 mb-4">
+                        <div class="flex justify-between"><span>إجمالي التحصيل:</span><span class="font-bold">${collected} ج.م</span></div>
+                        <div class="flex justify-between"><span>إجمالي التوصيل:</span><span class="font-bold">${deliveryFees} ج.م</span></div>
+                        <div class="flex justify-between"><span>العهدة الصباحية:</span><span class="font-bold">${d.dailyData.custody} ج.م</span></div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">هل يوجد سلفة؟ (0 إذا لا يوجد)</label>
+                        <input type="number" id="day-advance" class="w-full p-2 border rounded" value="0">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">مصاريف (بنزين/صيانة)</label>
+                        <input type="number" id="day-expenses" class="w-full p-2 border rounded" value="0">
+                    </div>
+                    <div class="pt-4 border-t font-bold text-center">
+                        المبلغ المفترض توريده: <span id="final-calc" class="text-xl text-green-600">${collected + d.dailyData.custody}</span> ج.م
+                    </div>
+                    <p class="text-[10px] text-gray-400 text-center">(التحصيل + العهدة - السلف - المصاريف)</p>
+                `;
+
+                // Live calculation
+                setTimeout(() => {
+                    const inputs = ['day-advance', 'day-expenses'];
+                    inputs.forEach(idInput => {
+                        document.getElementById(idInput).addEventListener('input', () => {
+                            const adv = parseFloat(document.getElementById('day-advance').value) || 0;
+                            const exp = parseFloat(document.getElementById('day-expenses').value) || 0;
+                            document.getElementById('final-calc').innerText = (collected + d.dailyData.custody - adv - exp);
+                        });
+                    });
+                }, 100);
+            }
+            openModal('day-modal');
+        }
+
+        function handleDayAction(e) {
+            e.preventDefault();
+            const id = document.getElementById('day-delegate-id').value;
+            const type = document.getElementById('day-action-type').value;
+            const d = delegates.find(x => x.id == id);
+
+            if (type === 'start') {
+                d.isActive = true;
+                d.dailyData = {
+                    date: new Date().toISOString().split('T')[0],
+                    custody: parseFloat(document.getElementById('day-custody').value) || 0,
+                    advances: 0,
+                    expenses: 0,
+                    collected: 0
+                };
+                addNotification("المندوبين", `بدأ المندوب ${d.name} يومه بعهدة ${d.dailyData.custody} ج.م`, "success");
+            } else {
+                const adv = parseFloat(document.getElementById('day-advance').value) || 0;
+                const exp = parseFloat(document.getElementById('day-expenses').value) || 0;
+                const collected = calculateDelegateCollected(id);
+                const totalToHand = (collected + d.dailyData.custody - adv - exp);
+
+                d.isActive = false;
+                addNotification("التقفيل", `تم تقفيل يوم المندوب ${d.name}. المبلغ المورد: ${totalToHand} ج.م`, "warning");
+                d.dailyData = null; // Reset for next time
+            }
+
+            saveData();
+            renderDelegates();
+            closeModal('day-modal');
+            updateDashboard();
+        }
+
+        // Order Logic
+        function handleOrderSubmit(e) {
+            e.preventDefault();
+            const idHidden = document.getElementById('order-id-hidden').value;
+            
+            const orderData = {
+                customer: document.getElementById('order-customer').value,
+                phone: document.getElementById('order-phone').value,
+                pickup: document.getElementById('order-pickup').value,
+                dropoff: document.getElementById('order-dropoff').value,
+                deliveryFee: parseFloat(document.getElementById('order-delivery-fee').value),
+                cod: parseFloat(document.getElementById('order-cod').value),
+                delegateId: document.getElementById('order-delegate').value,
+                status: document.getElementById('order-status').value,
+                notes: document.getElementById('order-notes').value,
+                timestamp: new Date().toISOString()
+            };
+
+            if (idHidden) {
+                // Edit existing
+                const index = orders.findIndex(o => o.id === idHidden);
+                orders[index] = { ...orders[index], ...orderData };
+                addNotification("الطلبات", `تم تعديل بيانات الطلب رقم ${idHidden}`, "info");
+            } else {
+                // New order
+                const newId = `#${String(orderCounter).padStart(4, '0')}`;
+                const newOrder = { id: newId, ...orderData };
+                orders.push(newOrder);
+                orderCounter++;
+                addNotification("الطلبات", `تم إضافة طلب جديد رقم ${newId}`, "success");
+            }
+
+            saveData();
+            renderOrders();
+            closeModal('order-modal');
+            e.target.reset();
+            updateDashboard();
+        }
+
+        function renderOrders(filteredOrders = orders) {
+            const tbody = document.getElementById('orders-table-body');
+            if (filteredOrders.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="p-10 text-center text-gray-400">لا توجد طلبات حالياً</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = filteredOrders.map(o => {
+                const delegate = delegates.find(d => d.id == o.delegateId)?.name || '<span class="text-red-500">⚠️ لم يتم التعيين</span>';
+                return `
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="p-4 font-bold text-indigo-600">${o.id}</td>
+                        <td class="p-4">
+                            <div class="font-bold">${o.customer}</div>
+                            <div class="text-xs text-gray-500">${o.phone}</div>
+                        </td>
+                        <td class="p-4 text-sm">${delegate}</td>
+                        <td class="p-4 font-bold">${o.cod} ج.م</td>
+                        <td class="p-4">
+                            <span class="status-badge ${getStatusColor(o.status)}">${getStatusText(o.status)}</span>
+                        </td>
+                        <td class="p-4">
+                            <div class="flex gap-2">
+                                <button onclick="editOrder('${o.id}')" class="text-blue-600 hover:text-blue-800"><i class="fas fa-edit"></i></button>
+                                <button onclick="deleteOrder('${o.id}')" class="text-red-400 hover:text-red-600"><i class="fas fa-trash"></i></button>
+                                <button onclick="printReceipt('${o.id}')" class="text-gray-400 hover:text-gray-600"><i class="fas fa-print"></i></button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function editOrder(id) {
+            const o = orders.find(x => x.id === id);
+            document.getElementById('order-id-hidden').value = o.id;
+            document.getElementById('order-customer').value = o.customer;
+            document.getElementById('order-phone').value = o.phone;
+            document.getElementById('order-pickup').value = o.pickup;
+            document.getElementById('order-dropoff').value = o.dropoff;
+            document.getElementById('order-delivery-fee').value = o.deliveryFee;
+            document.getElementById('order-cod').value = o.cod;
+            document.getElementById('order-delegate').value = o.delegateId;
+            document.getElementById('order-status').value = o.status;
+            document.getElementById('order-notes').value = o.notes;
+            
+            document.getElementById('order-modal-title').innerText = `تعديل الطلب ${o.id}`;
+            openModal('order-modal');
+        }
+
+        function deleteOrder(id) {
+            if(confirm('هل أنت متأكد من حذف هذا الطلب؟')) {
+                orders = orders.filter(o => o.id !== id);
+                saveData();
+                renderOrders();
+                updateDashboard();
+            }
+        }
+
+        function filterOrders(status) {
+            if (status === 'all') renderOrders(orders);
+            else renderOrders(orders.filter(o => o.status === status));
+        }
+
+        function getStatusColor(status) {
+            const map = {
+                'pending_assignment': 'bg-yellow-100 text-yellow-700',
+                'جاري التنفيذ': 'bg-blue-100 text-blue-700',
+                'في الطريق': 'bg-indigo-100 text-indigo-700',
+                'تم التسليم': 'bg-green-100 text-green-700',
+                'راجع': 'bg-red-100 text-red-700'
+            };
+            return map[status] || 'bg-gray-100 text-gray-700';
+        }
+
+        function getStatusText(status) {
+            if (status === 'pending_assignment') return 'بانتظار مندوب';
+            return status;
+        }
+
+        // Archive Logic
+        function renderArchive() {
+            const container = document.getElementById('archive-days-list');
+            const dates = Object.keys(archive).sort().reverse();
+            
+            if (dates.length === 0) {
+                container.innerHTML = '<div class="col-span-4 card p-10 text-center text-gray-400">لا توجد بيانات مؤرشفة بعد</div>';
+                return;
+            }
+
+            container.innerHTML = dates.map(date => `
+                <div onclick="showArchiveDetail('${date}')" class="card p-4 hover:border-indigo-500 border-2 border-transparent cursor-pointer transition">
+                    <div class="flex items-center gap-3">
+                        <div class="bg-indigo-100 p-3 rounded-lg text-indigo-600"><i class="fas fa-calendar-alt"></i></div>
+                        <div>
+                            <div class="font-bold">${date}</div>
+                            <div class="text-xs text-gray-500">${archive[date].length} طلب</div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function showArchiveDetail(date) {
+            const data = archive[date];
+            document.getElementById('archive-date-title').innerText = `أرشيف يوم ${date}`;
+            document.getElementById('archive-detail').classList.remove('hidden');
+            
+            const tbody = document.getElementById('archive-table-body');
+            tbody.innerHTML = data.map(o => `
+                <tr class="border-b text-sm">
+                    <td class="p-4">${o.id}</td>
+                    <td class="p-4">${o.customer}</td>
+                    <td class="p-4">${delegates.find(d => d.id == o.delegateId)?.name || 'غير معين'}</td>
+                    <td class="p-4 font-bold">${o.cod} ج.م</td>
+                    <td class="p-4"><span class="status-badge ${getStatusColor(o.status)}">${getStatusText(o.status)}</span></td>
+                </tr>
+            `).join('');
+            
+            document.getElementById('archive-days-list').classList.add('opacity-30', 'pointer-events-none');
+        }
+
+        function closeArchiveDetail() {
+            document.getElementById('archive-detail').classList.add('hidden');
+            document.getElementById('archive-days-list').classList.remove('opacity-30', 'pointer-events-none');
+        }
+
+        // Dashboard Updates
+        function updateDashboard() {
+            document.getElementById('stat-today-orders').innerText = orders.length;
+            const collected = orders.filter(o => o.status === 'تم التسليم').reduce((sum, o) => sum + (o.cod || 0), 0);
+            document.getElementById('stat-total-cash').innerText = collected + ' ج.م';
+            document.getElementById('stat-pending-assignment').innerText = orders.filter(o => o.status === 'pending_assignment').length;
+            document.getElementById('stat-active-drivers').innerText = delegates.filter(d => d.isActive).length;
+
+            // Recent Orders
+            const recentBody = document.getElementById('recent-orders-list');
+            recentBody.innerHTML = orders.slice(-5).reverse().map(o => `
+                <tr class="border-b text-xs">
+                    <td class="py-3 font-bold">${o.id}</td>
+                    <td class="py-3">${o.customer}</td>
+                    <td class="py-3">${delegates.find(d => d.id == o.delegateId)?.name || '-'}</td>
+                    <td class="py-3"><span class="status-badge ${getStatusColor(o.status)}">${getStatusText(o.status)}</span></td>
+                </tr>
+            `).join('');
+
+            // Delegate Status List
+            const statusList = document.getElementById('delegate-status-list');
+            statusList.innerHTML = delegates.slice(0, 4).map(d => `
+                <div class="flex justify-between items-center bg-gray-50 p-3 rounded">
+                    <div class="flex items-center gap-3">
+                        <div class="h-8 w-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold text-xs">${d.name[0]}</div>
+                        <span class="text-sm font-medium">${d.name}</span>
+                    </div>
+                    <span class="text-[10px] px-2 py-0.5 rounded-full ${d.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}">
+                        ${d.isActive ? 'يعمل' : 'غير نشط'}
+                    </span>
+                </div>
+            `).join('');
+        }
+
+        // Helper Functions
+        function openModal(id) {
+            document.getElementById(id).classList.remove('hidden');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+            if (id === 'order-modal') {
+                document.getElementById('order-form').reset();
+                document.getElementById('order-id-hidden').value = '';
+                document.getElementById('order-modal-title').innerText = 'إضافة طلب جديد';
+            }
+            if (id === 'delegate-modal') {
+                document.getElementById('delegate-form').reset();
+                document.getElementById('delegate-id').value = '';
+                document.getElementById('delegate-modal-title').innerText = 'إضافة مندوب جديد';
+            }
+        }
+
+        function handleDelegateSubmit(e) {
+            e.preventDefault();
+            const id = document.getElementById('delegate-id').value;
+            const data = {
+                name: document.getElementById('delegate-name').value,
+                phone: document.getElementById('delegate-phone').value,
+                type: document.getElementById('delegate-type').value
+            };
+
+            if (id) {
+                const idx = delegates.findIndex(d => d.id == id);
+                delegates[idx] = { ...delegates[idx], ...data };
+                addNotification("المندوبين", `تم تحديث بيانات المندوب ${data.name}`, "info");
+            } else {
+                const newDelegate = {
+                    id: Date.now(),
+                    ...data,
+                    isActive: false,
+                    dailyData: null
+                };
+                delegates.push(newDelegate);
+                addNotification("المندوبين", `تم إضافة المندوب الجديد ${data.name}`, "success");
+            }
+
+            saveData();
+            renderDelegates();
+            closeModal('delegate-modal');
+            updateDashboard();
+        }
+
+        function editDelegate(id) {
+            const d = delegates.find(x => x.id == id);
+            document.getElementById('delegate-id').value = d.id;
+            document.getElementById('delegate-name').value = d.name;
+            document.getElementById('delegate-phone').value = d.phone;
+            document.getElementById('delegate-type').value = d.type;
+            document.getElementById('delegate-modal-title').innerText = "تعديل بيانات المندوب";
+            openModal('delegate-modal');
+        }
+
+        function deleteDelegate(id) {
+            if(confirm('هل أنت متأكد من حذف هذا المندوب؟ سيتم مسح بياناته بالكامل.')) {
+                delegates = delegates.filter(d => d.id != id);
+                saveData();
+                renderDelegates();
+                updateDashboard();
+            }
+        }
+
+        function updateDelegateSelects() {
+            const el = document.getElementById('order-delegate');
+            if (!el) return;
+            el.innerHTML = '<option value="">بدون مندوب (لاحقاً)</option>' + 
+                delegates.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+        }
+
+        function printReceipt(id) {
+            const o = orders.find(x => x.id === id);
+            alert(`جاري تجهيز طباعة إيصال الطلب ${o.id} للعميل ${o.customer}`);
+            // Implementation for actual print would go here
+        }
+
+        // Initialize
+        checkAutoArchive();
+        updateDashboard();
+        updateNotifBadge();
+        renderDelegates();
+        renderOrders();
+        
+        // Interval to check for midnight every minute
+        setInterval(checkAutoArchive, 60000);
+
+    </script>
+</body>
+</html>
